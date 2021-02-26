@@ -94,6 +94,7 @@ class BERTopic:
                  umap_model: umap.UMAP = None,
                  hdbscan_model: hdbscan.HDBSCAN = None,
                  vectorizer_model: CountVectorizer = None,
+                 similarity_threshold_merging: float = None, # added by A. Ibaba on February 18th, 2021
                  verbose: bool = False,
                  ):
         """BERTopic initialization
@@ -152,6 +153,9 @@ class BERTopic:
         # Vectorizer
         self.n_gram_range = n_gram_range
         self.vectorizer_model = vectorizer_model or CountVectorizer(ngram_range=self.n_gram_range)
+        
+        # Similarity threshold (added by A. Ibaba on February 18th, 2021)
+        self.similarity_threshold_merging = similarity_threshold_merging
 
         # UMAP
         self.umap_model = umap_model or umap.UMAP(n_neighbors=15,
@@ -1081,7 +1085,13 @@ class BERTopic:
             topic_to_merge_into = np.argmax(similarities[topic_to_merge + 1]) - 1
 
             # Only map topics if they have a high similarity
-            if (similarity > 0.915) & (topic_to_merge_into not in has_mapped):
+            # Modified by A. Ibaba on February 18th, 2021
+            threshold = 0.
+            if self.similarity_threshold_merging is None:
+                threshold = 0.915
+            else:
+                threshold = self.similarity_threshold_merging
+            if (similarity > threshold) & (topic_to_merge_into not in has_mapped):
                 # Update Topic labels
                 documents.loc[documents.Topic == topic_to_merge, "Topic"] = topic_to_merge_into
                 self.mapped_topics[topic_to_merge] = topic_to_merge_into
@@ -1218,3 +1228,34 @@ class BERTopic:
         parameters = sorted([p.name for p in init_signature.parameters.values()
                              if p.name != 'self' and p.kind != p.VAR_KEYWORD])
         return parameters
+    
+    
+    # Added by A. Ibaba on February 22 2021
+    def get_relevant_docs(self,
+                          topic: int,
+                          predictions: pd.DataFrame,
+                          probabilities: np.ndarray,
+                          min_probability: float = 0.015):
+        """ Get all the documents associated with a given topic with a user-defined minimum probability
+
+        Arguments:
+            topic: The topic for which relevant documents are searched.
+            predictions: Topic predictions for each documents
+            probabilities: An array of probability scores
+            min_probability: The probability threshold above which documents are returned
+
+        Usage:
+
+        Make sure to fit the model before and only input
+        a single topic for relevant documents extraction:
+
+        ```python
+        model.get_relevant_docs(topic, predictions, probabilities, min_probability)
+        """
+        
+        assert topic > -1, "The topic's label should be greater than -1!"
+        
+        doc_ids = np.asarray(np.asarray(predictions) == topic).nonzero()[0]
+        relevant_docs = np.asarray([idx for idx in doc_ids if probabilities[idx, predictions[idx]] >= min_probability])
+        
+        return relevant_docs
