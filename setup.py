@@ -36,36 +36,16 @@ extra_packages = visualization_packages + flair_packages
 dev_packages = docs_packages + test_packages + extra_packages
 
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
-
 setuptools.setup(
-    name="bertopic",
-    packages=["bertopic"],
+    name='bertopic',
     version="0.5.0",
-    author="Maarten Grootendorst",
-    author_email="maartengrootendorst@gmail.com",
-    description="BERTopic performs topic Modeling with state-of-the-art transformer models.",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/MaartenGr/BERTopic",
-    keywords="nlp bert topic modeling embeddings",
-    classifiers=[
-        "Programming Language :: Python",
-        "Intended Audience :: Science/Research",
-        "Intended Audience :: Developers",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",
-        "License :: OSI Approved :: MIT License",
-        "Topic :: Scientific/Engineering",
-        "Operating System :: Microsoft :: Windows",
-        "Operating System :: POSIX",
-        "Operating System :: Unix",
-        "Operating System :: MacOS",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.8",
-    ],
+    description='Modification of BERTopic package from Maarten Grootendorst: additional functions added.',
+    url='#',
+    author="Ariel Ibaba",
+    author_email="aibaba2108@gmail.com",
     install_requires=base_packages,
+    packages=setuptools.find_packages(),
+    zip_safe=False,
     extras_require={
         "test": test_packages,
         "docs": docs_packages,
@@ -76,3 +56,4 @@ setuptools.setup(
     },
     python_requires='>=3.6',
 )
+
