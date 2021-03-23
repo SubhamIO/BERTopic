@@ -1233,31 +1233,36 @@ class BERTopic:
     
     
     # Added by A. Ibaba on February 22 2021
-    def get_relevant_docs(self,
-                          topic: int,
-                          predictions: pd.DataFrame,
-                          probabilities: np.ndarray,
-                          min_probability: float = 0.015):
-        """ Get all the documents associated with a given topic with a user-defined minimum probability
+    def get_most_relevant_documents(self,
+                          cluster_id: int,
+                          condensed_tree: hdbscan.plots.CondensedTree):
+        """ Get the most relevant documents associated with a given topic
 
         Arguments:
-            topic: The topic for which relevant documents are searched.
-            predictions: Topic predictions for each documents
-            probabilities: An array of probability scores
-            min_probability: The probability threshold above which documents are returned
-
+            cluster_id: The topic considered
+            condensed_tree: The condensed tree obtained with the HDBSCAN clusterer
+            
         Usage:
 
         Make sure to fit the model before and only input
         a single topic for relevant documents extraction:
 
         ```python
-        model.get_relevant_docs(topic, predictions, probabilities, min_probability)
+        model.get_most_relevant_docs(cluster_id, condensed_tree)
         """
         
-        assert topic > -1, "The topic's label should be greater than -1!"
+        assert cluster_id > -1, "The topic's label should be greater than -1!"
         
-        doc_ids = np.asarray(np.asarray(predictions) == topic).nonzero()[0]
-        relevant_docs = np.asarray([idx for idx in doc_ids if probabilities[idx, predictions[idx]] >= min_probability])
-        
-        return relevant_docs
+        raw_tree = condensed_tree._raw_tree
+        # Just the cluster elements of the tree, excluding singleton points
+        cluster_tree = raw_tree[raw_tree['child_size'] > 1]
+        # Get the leaf cluster nodes under the cluster we are considering
+        leaves = hdbscan.plots._recurse_leaf_dfs(cluster_tree, cluster_id)
+        # Now collect up the last remaining points of each leaf cluster (the heart of the leaf)
+        result = np.array([])
+        for leaf in leaves:
+            max_lambda = raw_tree['lambda_val'][raw_tree['parent'] == leaf].max()
+            points = raw_tree['child'][(raw_tree['parent'] == leaf) &
+                                       (raw_tree['lambda_val'] == max_lambda)]
+            result = np.hstack((result, points))
+        return result.astype(np.int)
