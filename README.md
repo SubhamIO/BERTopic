@@ -19,21 +19,15 @@ and [here](https://towardsdatascience.com/interactive-topic-modeling-with-bertop
 
 ## Installation
 
-Installation can be done using [pypi](https://pypi.org/project/bertopic/):
+Installation can be done using a local installation as the custom package is not published.
 
-```bash
-pip install bertopic
+* Clone the topic modelling repo locally and move the csv filesdownloaded from PhantomBuster in the folder: **topic-modeling/data/input**
+Note: It is recommended to have a new Pyhton environment and then you can install the dependencies accordingly.
+* Now follow these steps to install a local package(Custom BERTopic):
 ```
-
-To use the visualization options, install BERTopic as follows:
-
-```bash
-pip install bertopic[visualization]
-```
-
-To use Flair embeddings, install BERTopic as follows:
-```bash
-pip install bertopic[flair]
+git clone https://github.com/atoti/BERTopic.git
+cd ../gitclonedirectory/BERTopic
+pip install -e .
 ```
 
 ## Getting Started
@@ -50,7 +44,12 @@ from sklearn.datasets import fetch_20newsgroups
  
 docs = fetch_20newsgroups(subset='all',  remove=('headers', 'footers', 'quotes'))['data']
 
-topic_model = BERTopic()
+topic_model = BERTopic(
+                       similarity_threshold_merging=0.5, # provide here you desired topics merging similarity threshold (between 0 and 1)
+                       topic_words_diversity=0.5,        # provide here you desired keywords diversity ratio
+                       stop_words = STOP_WORDS,          # STOP_WORDS is your custom stop words list
+                       replace_dic = REPLACE,            # REPLACE is your custom dictionary of words replacement
+              )
 topics, _ = topic_model.fit_transform(docs)
 ```
 
@@ -141,6 +140,19 @@ You can also use previously generated embeddings by passing it through `fit_tran
 ```python
 topic_model = BERTopic()
 topics, _ = topic_model.fit_transform(docs, embeddings)
+```
+
+**Extract most relevant documents**
+You can extract the most relevant documents associated with any given topic as follows:
+
+```
+# Get the clusterer model, the clusters' tree and the clusters (topics ids)
+clusterer = topic_model.hdbscan_model
+tree = clusterer.condensed_tree_
+clusters = tree._select_clusters()
+
+# Get the ids of the most relevant documents (exemplars) associated with the topic at index idx
+c_exemplars = topic_model.get_most_relevant_documents(clusters[idx], tree)
 ```
 
 ### Overview
