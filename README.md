@@ -142,7 +142,7 @@ topic_model = BERTopic()
 topics, _ = topic_model.fit_transform(docs, embeddings)
 ```
 
-**Extract most relevant documents**
+**Extract most relevant documents**  
 You can extract the most relevant documents associated with any given topic as follows:
 
 ```
