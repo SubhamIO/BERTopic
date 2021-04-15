@@ -24,6 +24,8 @@ from ._utils import MyLogger, check_documents_type, check_embeddings_shape, chec
 from ._embeddings import languages
 from ._mmr import mmr
 
+# Added by Ariel Ibaba
+from ._utils import cleanse_text, remove_stopwords, replace_words
 
 
 # Visualization
@@ -96,7 +98,13 @@ class BERTopic:
                  umap_model: umap.UMAP = None,
                  hdbscan_model: hdbscan.HDBSCAN = None,
                  vectorizer_model: CountVectorizer = None,
-                 similarity_threshold_merging: float = None, # added by A. Ibaba on February 18th, 2021
+                 #
+                 # added by A. Ibaba on February 18th, 2021
+                 similarity_threshold_merging: float = None,
+                 topic_words_diversity: float = None,
+                 stop_words: List[str] = None,
+                 replace_dic: dict() = None,
+                 #
                  verbose: bool = False,
                  ):
         """BERTopic initialization
@@ -156,8 +164,13 @@ class BERTopic:
         self.n_gram_range = n_gram_range
         self.vectorizer_model = vectorizer_model or CountVectorizer(ngram_range=self.n_gram_range)
         
-        # Similarity threshold (added by A. Ibaba on February 18th, 2021)
+        # Added by A. Ibaba on February 18th, 2021
+        # Similarity threshold, intra-topic keywords diversity
+        # list of stop words and words replacement dictionary
         self.similarity_threshold_merging = similarity_threshold_merging
+        self.topic_words_diversity = topic_words_diversity
+        self.stop_words = stop_words
+        self.replace_dic = replace_dic
 
         # UMAP
         self.umap_model = umap_model or umap.UMAP(n_neighbors=15,
@@ -271,6 +284,9 @@ class BERTopic:
         """
         check_documents_type(documents)
         check_embeddings_shape(embeddings, documents)
+        
+        # Added by Ariel Ibaba on April 7 2021
+        documents = [cleanse_text(doc) for doc in documents]
 
         documents = pd.DataFrame({"Document": documents,
                                   "ID": range(len(documents)),
@@ -351,6 +367,9 @@ class BERTopic:
 
         if isinstance(documents, str):
             documents = [documents]
+            
+        # Added by Ariel Ibaba on April 7 2021
+        documents = [cleanse_text(doc) for doc in documents]
 
         if not isinstance(embeddings, np.ndarray):
             self.embedding_model = self._select_embedding_model()
@@ -853,8 +872,25 @@ class BERTopic:
         Returns:
             c_tf_idf: The resulting matrix giving a value (importance score) for each word per topic
         """
-        documents_per_topic = documents.groupby(['Topic'], as_index=False).agg({'Document': ' '.join})
-        self.c_tf_idf, words = self._c_tf_idf(documents_per_topic, m=len(documents))
+        
+        # Added by A. Ibaba on April 7 2021
+        documents_ = documents.copy()
+        documents_ = documents_.reset_index(drop=True)
+        doc_ids = np.asarray([idx for idx in np.arange(len(documents_)) if documents_.iloc[idx]['Topic'] == -1])
+        topics = [topic for topic in list(documents_.Topic) if topic != -1]
+        clusterer = self.hdbscan_model
+        tree = clusterer.condensed_tree_
+        clusters = tree._select_clusters()
+        
+        for topic in topics:
+            cluster = clusters[topic]
+            c_exemplars = self.get_most_relevant_documents(cluster, tree)
+            doc_ids = np.hstack((doc_ids, c_exemplars))
+        documents_ = documents_.iloc[doc_ids, :]
+        documents_ = documents_.reset_index(drop=True)
+                
+        documents_per_topic = documents_.groupby(['Topic'], as_index=False).agg({'Document': ' '.join})
+        self.c_tf_idf, words = self._c_tf_idf(documents_per_topic, m=len(documents_))
         self._extract_words_per_topic(words)
         self._create_topic_vectors()
 
@@ -931,6 +967,13 @@ class BERTopic:
             words: List of all words (sorted according to tf_idf matrix position)
         """
 
+        # Added by Ariel Ibaba on April 7 2021
+        # Intra-topic keywords diversity rate
+        if self.topic_words_diversity is not None:
+            diversity = self.topic_words_diversity
+        else:
+            diversity = 0
+        
         # Get top 30 words per topic based on c-TF-IDF score
         c_tf_idf = self.c_tf_idf.toarray()
         labels = sorted(list(self.topic_sizes.keys()))
@@ -948,7 +991,7 @@ class BERTopic:
                 word_embeddings = self._extract_embeddings(words, verbose=False)
                 topic_embedding = self._extract_embeddings(" ".join(words), verbose=False).reshape(1, -1)
 
-                topic_words = mmr(topic_embedding, word_embeddings, words, top_n=self.top_n_words, diversity=0)
+                topic_words = mmr(topic_embedding, word_embeddings, words, top_n=self.top_n_words, diversity=diversity)
                 self.topics[topic] = [(word, value) for word, value in self.topics[topic] if word in topic_words]
 
     def _select_embedding_model(self) -> Union[SentenceTransformer, DocumentEmbeddings]:
@@ -1217,6 +1260,14 @@ class BERTopic:
         if self.language == "english":
             cleaned_documents = [re.sub(r'[^A-Za-z0-9 ]+', '', doc) for doc in cleaned_documents]
         cleaned_documents = [doc if doc != "" else "emptydoc" for doc in cleaned_documents]
+        
+        # Added by Ariel Ibaba on April 7 2021
+        cleaned_documents = [cleanse_text(doc) for doc in cleaned_documents]
+        if self.stop_words is not None:
+            cleaned_documents = [remove_stopwords(doc, self.stop_words) for doc in cleaned_documents]
+        if self.replace_dic is not None:
+            cleaned_documents = [replace_words(doc, self.replace_dic) for doc in cleaned_documents]
+        
         return cleaned_documents
 
     @classmethod
